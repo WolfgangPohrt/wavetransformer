@@ -13,7 +13,8 @@ from modules.positional_encoding import PositionalEncoding
 import torch
 import torch.nn.functional as F
 from modules.decode_utils import greedy_decode, topk_sampling
-from modules.beam import beam_decode
+from modules.beam import beam_decode, beam_decode_c
+from modules.sampling import top_k_top_p_sampling
 import gc
 __author__ = 'An Tran'
 __docformat__ = 'reStructuredText'
@@ -29,6 +30,8 @@ class WaveTransformer10(Module):
     For the WaveTransfomer using only E_tf, you can see the `models.wave_transformer_8.py` file.
     """
     def __init__(self,
+                 indices_list,
+                 pretrained_emb,
                  in_channels_encoder: int,
                  out_waveblock_encoder: List,
                  kernel_size_encoder: int,
@@ -88,6 +91,8 @@ class WaveTransformer10(Module):
         self.max_length: int = 22
         self.nb_classes: int = nb_classes
         self.beam_size = beam_size
+        self.indices_list = indices_list
+        self.pretrained_emb = pretrained_emb
         self.encoder: Module = WaveNetEncoder10(
             in_channels=in_channels_encoder,
             out_waveblock=out_waveblock_encoder,
@@ -163,20 +168,35 @@ class WaveTransformer10(Module):
     def _inference(self, x):
         # torch.cuda.empty_cache()
         # gc.collect()
-        if self.beam_size > 1:
-            return beam_decode(x,
-                               self.encoder,
-                               self.decoder,
-                               self.embeddings,
-                               self.classifier,
-                               self.beam_size,
-                               1)
-        else:
-            return greedy_decode(x,
-                                 self.encoder,
-                                 self.decoder,
-                                 self.embeddings,
-                                 self.classifier,
-                                 self.max_length,
-                                 )
+        return beam_decode_c(x,
+                              self.encoder,
+                              self.decoder,
+                              self.embeddings,
+                              self.classifier,
+                              self.indices_list,
+                              self.pretrained_emb,
+                              2,
+                              1)
+        # return top_k_top_p_sampling(x,
+        #                        self.encoder,
+        #                        self.decoder,
+        #                        self.embeddings,
+        #                        self.classifier
+        #                        )
+        # if self.beam_size > 1:
+        #     return beam_decode(x,
+        #                        self.encoder,
+        #                        self.decoder,
+        #                        self.embeddings,
+        #                        self.classifier,
+        #                        self.beam_size,
+        #                        1)
+        # else:
+        #     return greedy_decode(x,
+        #                          self.encoder,
+        #                          self.decoder,
+        #                          self.embeddings,
+        #                          self.classifier,
+        #                          self.max_length,
+        #                          )
 # EOF

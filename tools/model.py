@@ -38,6 +38,8 @@ def get_device(force_cpu: bool) \
 def get_model(settings_model: MutableMapping[str, Union[str, MutableMapping]],
               settings_io: MutableMapping[str, Union[str, MutableMapping]],
               output_classes: int,
+              indices_list,
+              pretrained_emb,
               device: str) \
         -> Module:
     """Creates and returns the model for the process.
@@ -56,6 +58,8 @@ def get_model(settings_model: MutableMapping[str, Union[str, MutableMapping]],
     encoder_settings = settings_model['encoder']
     decoder_settings = settings_model['decoder']
     decoder_settings.update({'nb_classes': output_classes})
+    decoder_settings.update({'indices_list': indices_list})
+    decoder_settings.update({'pretrained_emb': pretrained_emb})
 
     kwargs = {**encoder_settings, **decoder_settings}
 
@@ -130,6 +134,7 @@ def module_epoch_passing(data: DataLoader,
 
     for i, example in enumerate(data):
         y_hat, y, f_names_tmp = module_forward_passing(example, module, use_y)
+        print(i)
         f_names.extend(f_names_tmp)
         y = y[:, 1:]
         y_hat = y_hat.transpose(0, 1)
@@ -167,7 +172,8 @@ def module_epoch_passing(data: DataLoader,
 
 def module_forward_passing(data: MutableSequence[Tensor],
                            module: Module,
-                           use_y: bool) \
+                           use_y: bool
+                           ) \
         -> Tuple[Tensor, Tensor, List[str]]:
     """One forward passing of the module.
 

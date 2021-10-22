@@ -21,6 +21,8 @@ from tools.model import module_epoch_passing, get_model,\
 from data_handlers.clotho_loader import get_clotho_loader
 from eval_metrics import evaluate_metrics
 from operator import itemgetter
+from gensim.models.word2vec import LineSentence, Word2Vec
+
 
 __author__ = 'Konstantinos Drossos -- Tampere University'
 __docformat__ = 'reStructuredText'
@@ -177,12 +179,15 @@ def _do_evaluation(model: Module,
         f'{text_sep}\n{text_sep}\n{text_sep}\n\n')
     logger.bind(is_caption=True, indent=0).info(
         f'{starting_text}.\n\n')
+    
 
     with no_grad():
         evaluation_outputs = module_epoch_passing(
             data=validation_data, module=model,
             use_y=False,
             objective=None, optimizer=None)
+    
+    print('finished epoch')
 
     captions_pred, captions_gt = _decode_outputs(
         evaluation_outputs[1],
@@ -194,10 +199,21 @@ def _do_evaluation(model: Module,
 
     logger_main.info('Evaluation done')
 
+    with open('/home/theokouz/wavetransformer/outputs/captions_pred.pkl', 'wb') as f:
+        pickle.dump(captions_pred, f)
+
+    with open('/home/theokouz/wavetransformer/outputs/captions_gt.pkl', 'wb') as f:
+        pickle.dump(captions_gt, f)
+
     metrics = evaluate_metrics(captions_pred, captions_gt)
+
+    with open('/home/theokouz/wavetransformer/outputs/metrics', 'wb') as f:
+        pickle.dump(metrics, f)
 
     for metric, values in metrics.items():
         logger_main.info(f'{metric:<7s}: {values["score"]:7.4f}')
+    
+    
 
 
 def _do_training(model: Module,
@@ -530,10 +546,14 @@ def method(settings: MutableMapping[str, Any],
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         """
+        
+
         logger_inner.info('Setting up model')
         model = get_model(
             settings_model=settings['dnn_training_settings']['model'],
             settings_io=settings['dirs_and_files'],
+            indices_list=indices_list,
+            pretrained_emb=w2v,
             output_classes=len(indices_list),
             device=device)
         #model = MyDataParallel(model)
@@ -563,6 +583,11 @@ def method(settings: MutableMapping[str, Any],
 
     if settings['workflow']['dnn_evaluation']:
         logger_main.info('Doing evaluation')
+
+        logger_main.info('Loding Word2Vec')
+        w2v = Word2Vec.load("/home/theokouz/wavetransformer/w2v.mod")
+        logger_main.info('Done')
+        
         if model is None:
             if not settings['dnn_training_settings']['model']['use_pre_trained_model']:
                 raise AttributeError('Mode is set to only evaluation, but'
@@ -573,6 +598,8 @@ def method(settings: MutableMapping[str, Any],
                 settings_model=settings['dnn_training_settings']['model'],
                 settings_io=settings['dirs_and_files'],
                 output_classes=len(indices_list),
+                indices_list=indices_list,
+                pretrained_emb=w2v,
                 device=device)
             model.to(device)
             logger_inner.info('Model ready')

@@ -25,6 +25,8 @@ decoder:
   n_features_decoder: 128
   n_hidden_decoder: 128
   nb_classes: # Empty, to be filled automatically.
+  indices_list: # Empty, to be filled automatically.
+  pretrained_emb: # Empty, to be filled automatically.
   dropout_decoder: .25
-  beam_size: 0 
+  beam_size: 2 
 # EOF

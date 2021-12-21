@@ -44,7 +44,7 @@ class ASTModel(nn.Module):
     :param audioset_pretrain: if use full AudioSet and ImageNet pretrained model
     :param model_size: the model size of AST, should be in [tiny224, small224, base224, base384], base224 and base 384 are same model, but are trained differently during ImageNet pretraining.
     """
-    def __init__(self, label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, imagenet_pretrain=True, audioset_pretrain=False, model_size='base384', verbose=True):
+    def __init__(self, label_dim=527, fstride=10, tstride=10, input_fdim=64, input_tdim=1024, imagenet_pretrain=True, audioset_pretrain=False, model_size='base384', verbose=True):
 
         super(ASTModel, self).__init__()
         # assert timm.__version__ == '0.4.5', 'Please use timm == 0.4.5, the code might not be compatible with newer versions.'
@@ -127,7 +127,7 @@ class ASTModel(nn.Module):
                 audioset_mdl_url = 'https://www.dropbox.com/s/cv4knew8mvbrnvq/audioset_0.4593.pth?dl=1'
                 wget.download(audioset_mdl_url, out='../../pretrained_models/audioset_10_10_0.4593.pth')
             sd = torch.load('../../pretrained_models/audioset_10_10_0.4593.pth', map_location=device)
-            audio_model = ASTModel(label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=1024, imagenet_pretrain=False, audioset_pretrain=False, model_size='base384', verbose=False)
+            audio_model = ASTModel(label_dim=527, fstride=10, tstride=10, input_fdim=64, input_tdim=1024, imagenet_pretrain=False, audioset_pretrain=False, model_size='base384', verbose=False)
             # audio_model = torch.nn.DataParallel(audio_model)
             audio_model.load_state_dict(sd, strict=False)
             self.v = audio_model.v
@@ -142,17 +142,22 @@ class ASTModel(nn.Module):
                 print('frequncey stride={:d}, time stride={:d}'.format(fstride, tstride))
                 print('number of patches={:d}'.format(num_patches))
                 print('input_time_dim={:d}'.format(input_tdim))
-            new_pos_embed = self.v.pos_embed[:, 2:, :].detach().reshape(1, 1212, 768).transpose(1, 2).reshape(1, 768, 12, 101)
+            print(self.v.pos_embed.shape)
+            # new_pos_embed = self.v.pos_embed[:, 2:, :].detach().reshape(1, 1212, 768).transpose(1, 2).reshape(1, 768, 12, 101)
+            new_pos_embed = self.v.pos_embed[:, 2:, :].detach().reshape(1, 505, 768).transpose(1, 2).reshape(1, 768, 5, 101)
+
             # if the input sequence length is larger than the original audioset (10s), then cut the positional embedding
             if t_dim < 101:
                 new_pos_embed = new_pos_embed[:, :, :, 50 - int(t_dim/2): 50 - int(t_dim/2) + t_dim]
             # otherwise interpolate
             else:
-                new_pos_embed = torch.nn.functional.interpolate(new_pos_embed, size=(12, t_dim), mode='bilinear')
+                # new_pos_embed = torch.nn.functional.interpolate(new_pos_embed, size=(12, t_dim), mode='bilinear')
+                new_pos_embed = torch.nn.functional.interpolate(new_pos_embed, size=(5, t_dim), mode='bilinear')
+
             new_pos_embed = new_pos_embed.reshape(1, 768, num_patches).transpose(1, 2)
             self.v.pos_embed = nn.Parameter(torch.cat([self.v.pos_embed[:, :2, :].detach(), new_pos_embed], dim=1))
 
-    def get_shape(self, fstride, tstride, input_fdim=128, input_tdim=1024):
+    def get_shape(self, fstride, tstride, input_fdim=64, input_tdim=1024):
         test_input = torch.randn(1, 1, input_fdim, input_tdim)
         test_proj = nn.Conv2d(1, self.original_embedding_dim, kernel_size=(16, 16), stride=(fstride, tstride))
         test_out = test_proj(test_input)
@@ -163,10 +168,10 @@ class ASTModel(nn.Module):
     @autocast()
     def forward(self, x):
         """
-        :param x: the input spectrogram, expected shape: (batch_size, time_frame_num, frequency_bins), e.g., (12, 1024, 128)
+        :param x: the input spectrogram, expected shape: (batch_size, time_frame_num, frequency_bins), e.g., (12, 1024, 64)
         :return: prediction
         """
-        # expect input x = (batch_size, time_frame_num, frequency_bins), e.g., (12, 1024, 128)
+        # expect input x = (batch_size, time_frame_num, frequency_bins), e.g., (12, 1024, 64)
         x = x.unsqueeze(1)
         x = x.transpose(2, 3)
 
@@ -187,18 +192,18 @@ class ASTModel(nn.Module):
         return x1
 
 if __name__ == '__main__':
-    input_tdim = 100
-    ast_mdl = ASTModel(input_tdim=input_tdim)
-    # input a batch of 10 spectrogram, each with 100 time frames and 128 frequency bins
-    test_input = torch.rand([10, input_tdim, 128])
-    test_output = ast_mdl(test_input)
-    # output should be in shape [10, 527], i.e., 10 samples, each with prediction of 527 classes.
-    print(test_output)
+    # input_tdim = 100
+    # ast_mdl = ASTModel(input_tdim=input_tdim)
+    # # input a batch of 10 spectrogram, each with 100 time frames and 64 frequency bins
+    # test_input = torch.rand([10, input_tdim, 64])
+    # test_output = ast_mdl(test_input)
+    # # output should be in shape [10, 527], i.e., 10 samples, each with prediction of 527 classes.
+    # print(test_output)
 
     input_tdim = 2346
     ast_mdl = ASTModel(input_tdim=input_tdim, audioset_pretrain=True)
-    # input a batch of 10 spectrogram, each with 512 time frames and 128 frequency bins
-    test_input = torch.rand([10, input_tdim, 128])
-    test_output1, test_output2  = ast_mdl(test_input)
+    # input a batch of 10 spectrogram, each with 512 time frames and 64 frequency bins
+    test_input = torch.rand([10, input_tdim, 64])
+    test_output = ast_mdl(test_input)
     # output should be in shape [10, 50], i.e., 10 samples, each with prediction of 50 classes.
-    print(test_output1.shape, test_output2.shape)
+    print(test_output.shape)

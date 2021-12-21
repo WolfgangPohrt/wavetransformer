@@ -141,7 +141,6 @@ class WaveTransformer10(Module):
                        ) \
             -> Tensor:
         """Forward pass of the baseline method.
-
         :param x: Input features.
         :type x: torch.Tensor
         :return: Predicted values.

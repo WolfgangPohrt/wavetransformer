@@ -60,7 +60,6 @@ def get_model(settings_model: MutableMapping[str, Union[str, MutableMapping]],
     decoder_settings.update({'nb_classes': output_classes})
     decoder_settings.update({'indices_list': indices_list})
     decoder_settings.update({'pretrained_emb': pretrained_emb})
-
     kwargs = {**encoder_settings, **decoder_settings}
 
     model_name = settings_model['model_name']
@@ -134,7 +133,6 @@ def module_epoch_passing(data: DataLoader,
 
     for i, example in enumerate(data):
         y_hat, y, f_names_tmp = module_forward_passing(example, module, use_y)
-        print(i)
         f_names.extend(f_names_tmp)
         y = y[:, 1:]
         y_hat = y_hat.transpose(0, 1)
